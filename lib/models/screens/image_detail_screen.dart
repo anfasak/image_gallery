@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-// import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_gallery/database/hive_service.dart';
 import 'package:image_gallery/models/image_model.dart';
@@ -29,14 +28,14 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
     _isFavorite = HiveService.isFavorite(widget.image.id);
   }
 
-  Future<void> _toggleFavorite() async {
-    if (_isUpdatingFavorite) {
-      return;
-    }
+  // ─────────────────────────────────────────────
+  // Favourite toggle
+  // ─────────────────────────────────────────────
 
-    setState(() {
-      _isUpdatingFavorite = true;
-    });
+  Future<void> _toggleFavorite() async {
+    if (_isUpdatingFavorite) return;
+
+    setState(() => _isUpdatingFavorite = true);
 
     try {
       if (_isFavorite) {
@@ -44,7 +43,7 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Removed from favorites')),
+            const SnackBar(content: Text('Removed from favourites')),
           );
         }
       } else {
@@ -52,90 +51,94 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Added to favorites')),
+            const SnackBar(content: Text('Added to favourites')),
           );
         }
       }
 
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() => _isFavorite = !_isFavorite);
       }
-
-      setState(() {
-        _isFavorite = !_isFavorite;
-      });
     } catch (error) {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingFavorite = false);
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Download
+  // ─────────────────────────────────────────────
+
+  Future<void> _downloadImage() async {
+    if (_isDownloading) return;
+
+    setState(() => _isDownloading = true);
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Downloading image...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      // Request storage permission on Android (SDK ≤ 32).
+      // On SDK 33+ the READ_MEDIA_IMAGES permission is required instead, but
+      // saving to the app-documents directory does NOT need any permission at
+      // all, so we only request the legacy permission when it is relevant.
+      if (Theme.of(context).platform == TargetPlatform.android) {
+        final PermissionStatus status = await Permission.storage.request();
+        if (!status.isGranted && !status.isLimited) {
+          throw Exception('Storage permission denied.');
+        }
       }
 
+      final DownloadResult result =
+          await DownloadService.downloadImage(widget.image);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
+        SnackBar(
+          content: Text(
+            result.alreadyDownloaded
+                ? 'Image already downloaded.'
+                : 'Image downloaded successfully.',
+          ),
+          backgroundColor:
+              result.alreadyDownloaded ? null : Colors.green,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+          backgroundColor: Colors.redAccent,
+        ),
       );
     } finally {
       if (mounted) {
-        setState(() {
-          _isUpdatingFavorite = false;
-        });
+        setState(() => _isDownloading = false);
       }
     }
   }
-Future<void> _downloadImage() async {
-  if (_isDownloading) {
-    return;
-  }
 
-  setState(() {
-    _isDownloading = true;
-  });
+  // ─────────────────────────────────────────────
+  // Build
+  // ─────────────────────────────────────────────
 
-  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Downloading image...'),
-      duration: Duration(seconds: 2),
-    ),
-  );
-
-  try {
-    if (Theme.of(context).platform == TargetPlatform.android) {
-      final PermissionStatus status = await Permission.storage.request();
-
-      if (!status.isGranted) {
-        throw Exception('Storage permission denied.');
-      }
-    }
-
-    final String filePath =
-        await DownloadService.downloadImage(widget.image);
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Image downloaded successfully!\n$filePath',
-        ),
-        backgroundColor: Colors.green,
-      ),
-    );
-  } catch (error) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(error.toString()),
-        backgroundColor: Colors.redAccent,
-      ),
-    );
-  } finally {
-    if (mounted) {
-      setState(() {
-        _isDownloading = false;
-      });
-    }
-  }
-}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -144,7 +147,7 @@ Future<void> _downloadImage() async {
         centerTitle: true,
         actions: <Widget>[
           IconButton(
-            tooltip: _isFavorite ? 'Remove from favorites' : 'Add to favorites',
+            tooltip: _isFavorite ? 'Remove from favourites' : 'Add to favourites',
             onPressed: _isUpdatingFavorite ? null : _toggleFavorite,
             icon: Icon(
               _isFavorite ? Icons.favorite : Icons.favorite_border,
@@ -178,10 +181,12 @@ Future<void> _downloadImage() async {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Zoomable image
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _ZoomableImage extends StatelessWidget {
-  const _ZoomableImage({
-    required this.imageUrl,
-  });
+  const _ZoomableImage({required this.imageUrl});
 
   final String imageUrl;
 
@@ -200,16 +205,11 @@ class _ZoomableImage extends StatelessWidget {
             imageUrl: imageUrl,
             fit: BoxFit.contain,
             placeholder: (BuildContext context, String url) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
+              return const Center(child: CircularProgressIndicator());
             },
             errorWidget: (BuildContext context, String url, Object error) {
               return const Center(
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  size: 56,
-                ),
+                child: Icon(Icons.broken_image_outlined, size: 56),
               );
             },
           ),
@@ -219,10 +219,12 @@ class _ZoomableImage extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Info panel
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _ImageInfoPanel extends StatelessWidget {
-  const _ImageInfoPanel({
-    required this.image,
-  });
+  const _ImageInfoPanel({required this.image});
 
   final ImageModel image;
 

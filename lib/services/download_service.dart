@@ -1,25 +1,57 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../database/hive_service.dart';
 import '../models/image_model.dart';
+
+/// Result returned by [DownloadService.downloadImage].
+class DownloadResult {
+  const DownloadResult({
+    required this.filePath,
+    required this.alreadyDownloaded,
+  });
+
+  /// Absolute path to the local image file.
+  final String filePath;
+
+  /// `true`  → the file was already present; no network request was made.
+  /// `false` → the file was freshly downloaded.
+  final bool alreadyDownloaded;
+}
 
 class DownloadService {
   DownloadService._();
 
   static final Dio _dio = Dio();
 
-  /// Downloads the selected image into the app documents directory.
+  /// Downloads [image] into the app documents directory.
   ///
-  /// Platform-specific gallery saving can be added later without changing
-  /// the screen code, because all download behavior is isolated here.
-  static Future<String> downloadImage(ImageModel image) async {
+  /// • If the image has already been downloaded **and the file still exists**,
+  ///   the cached path is returned immediately without a network request.
+  /// • Otherwise the image is downloaded, the path is persisted in Hive, and
+  ///   the path is returned.
+  ///
+  /// Throws an [Exception] with a human-readable message on failure.
+  static Future<DownloadResult> downloadImage(ImageModel image) async {
+    // ── 1. Check Hive for a previously stored path ──────────────────────────
+    final String? storedPath = HiveService.getDownloadedPath(image.id);
+    if (storedPath != null && File(storedPath).existsSync()) {
+      return DownloadResult(filePath: storedPath, alreadyDownloaded: true);
+    }
+
+    // ── 2. Download the image ────────────────────────────────────────────────
     try {
-      final directory = await getApplicationDocumentsDirectory();
+      final Directory directory = await getApplicationDocumentsDirectory();
       final String filePath = '${directory.path}/picsum_${image.id}.jpg';
 
       await _dio.download(image.downloadUrl, filePath);
 
-      return filePath;
+      // ── 3. Persist the path so the next call skips the download ────────────
+      await HiveService.setDownloadedPath(image.id, filePath);
+
+      return DownloadResult(filePath: filePath, alreadyDownloaded: false);
     } on DioException catch (error) {
       throw Exception(_getDioErrorMessage(error));
     } catch (error) {

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_gallery/database/hive_service.dart';
@@ -44,6 +45,10 @@ class FavoritesScreen extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Favourite card
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _FavoriteImageCard extends StatelessWidget {
   const _FavoriteImageCard({required this.image});
 
@@ -53,27 +58,20 @@ class _FavoriteImageCard extends StatelessWidget {
     try {
       await HiveService.removeFavorite(image.id);
 
-      if (!context.mounted) {
-        return;
-      }
+      if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Removed from favorites'),
+          content: const Text('Removed from favourites'),
           action: SnackBarAction(
             label: 'Undo',
-            onPressed: () {
-              HiveService.addFavorite(image);
-            },
+            onPressed: () => HiveService.addFavorite(image),
           ),
         ),
       );
     } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.toString())),
       );
@@ -83,9 +81,7 @@ class _FavoriteImageCard extends StatelessWidget {
   void _openImageDetails(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) {
-          return ImageDetailScreen(image: image);
-        },
+        builder: (BuildContext context) => ImageDetailScreen(image: image),
       ),
     );
   }
@@ -104,37 +100,31 @@ class _FavoriteImageCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: <Widget>[
-                  Image.network(
-                    image.downloadUrl,
+                  // ── Cached image ─────────────────────────────────────────
+                  CachedNetworkImage(
+                    imageUrl: image.downloadUrl,
                     fit: BoxFit.cover,
-                    loadingBuilder: (
-                      BuildContext context,
-                      Widget child,
-                      ImageChunkEvent? loadingProgress,
-                    ) {
-                      if (loadingProgress == null) {
-                        return child;
-                      }
-
+                    placeholder: (BuildContext context, String url) {
                       return const Center(
                         child: CircularProgressIndicator(),
                       );
                     },
-                    errorBuilder: (
+                    errorWidget: (
                       BuildContext context,
+                      String url,
                       Object error,
-                      StackTrace? stackTrace,
                     ) {
                       return const Center(
                         child: Icon(Icons.broken_image_outlined, size: 40),
                       );
                     },
                   ),
+                  // ── Remove-favourite button ───────────────────────────────
                   Positioned(
                     top: 8,
                     right: 8,
                     child: IconButton.filledTonal(
-                      tooltip: 'Remove from favorites',
+                      tooltip: 'Remove from favourites',
                       onPressed: () => _removeFavorite(context),
                       icon: const Icon(Icons.favorite, color: Colors.red),
                     ),
@@ -167,6 +157,10 @@ class _FavoriteImageCard extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty state
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _EmptyFavoritesView extends StatelessWidget {
   const _EmptyFavoritesView();

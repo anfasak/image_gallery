@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 
 import '../models/image_model.dart';
@@ -17,6 +18,27 @@ class ApiService {
   static const String _baseUrl = 'https://picsum.photos';
 
   final Dio _dio;
+
+  // ─────────────────────────────────────────────
+  // Connectivity helper
+  // ─────────────────────────────────────────────
+
+  /// Returns `true` when the device has an active network interface.
+  ///
+  /// Checks via [Connectivity]; this does **not** guarantee reachability of a
+  /// specific host, but is a fast, synchronous-feeling check suitable for
+  /// deciding whether to attempt a network call.
+  static Future<bool> hasConnection() async {
+    final List<ConnectivityResult> result =
+        await Connectivity().checkConnectivity();
+    return result.any(
+      (ConnectivityResult r) => r != ConnectivityResult.none,
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Image list
+  // ─────────────────────────────────────────────
 
   /// Fetches a list of images from the Picsum Photos API.
   ///
